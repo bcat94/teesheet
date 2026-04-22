@@ -1,65 +1,113 @@
-import Image from "next/image";
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { supabase, type Round } from '@/lib/supabase';
+
+type RoundWithCount = Round & { player_count: number };
 
 export default function Home() {
+  const [rounds, setRounds] = useState<RoundWithCount[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => { load(); }, []);
+
+  async function load() {
+    const today = new Date().toISOString().split('T')[0];
+    const { data: roundsData } = await supabase
+      .from('rounds')
+      .select('*')
+      .gte('date', today)
+      .order('date', { ascending: true });
+
+    if (!roundsData) { setLoading(false); return; }
+
+    const withCounts = await Promise.all(
+      roundsData.map(async (r) => {
+        const { count } = await supabase
+          .from('players')
+          .select('*', { count: 'exact', head: true })
+          .eq('round_id', r.id);
+        return { ...r, player_count: count || 0 };
+      })
+    );
+    setRounds(withCounts);
+    setLoading(false);
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <>
+      <div className="bg-[var(--green)] text-white pt-13 pb-6 px-5">
+        <h1 className="font-serif text-2xl">⛳ Tee Sheet</h1>
+        <p className="text-sm opacity-65 mt-1">Weekend golf, sorted.</p>
+      </div>
+
+      <div className="p-5">
+        <Link
+          href="/create"
+          className="block w-full bg-[var(--green)] text-white rounded-xl py-4 text-center font-semibold"
+        >
+          + New Round
+        </Link>
+
+        <div className="mt-6">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-3">
+            Upcoming rounds
+          </div>
+
+          {loading ? (
+            <div className="text-center py-10 text-[var(--muted)] text-sm">Loading…</div>
+          ) : rounds.length === 0 ? (
+            <div className="text-center py-11 text-[var(--muted)]">
+              <div className="text-4xl mb-3">🏌️</div>
+              <p className="text-sm leading-relaxed">
+                No rounds yet.<br />Hit New Round, then text<br />the link to your group chat.
+              </p>
+            </div>
+          ) : (
+            rounds.map((r) => (
+              <Link
+                key={r.id}
+                href={`/round/${r.id}`}
+                className={`flex items-center justify-between bg-white border border-[var(--border)] rounded-xl py-4 px-4 mb-2 ${r.cancelled ? 'opacity-55' : ''}`}
+              >
+                <div>
+                  <div className="text-[15px] font-semibold">
+                    {r.course}
+                    {r.cancelled && <span className="text-[var(--red)] text-xs ml-2">· Cancelled</span>}
+                  </div>
+                  <div className="text-[13px] text-[var(--muted)] mt-0.5">
+                    {fmtDate(r.date)} · {fmtTime(r.time)}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-semibold text-[var(--green-mid)]">
+                    {r.player_count}/4
+                  </div>
+                  {!r.cancelled && (
+                    <div className="text-xs text-[var(--muted)] mt-0.5">
+                      {4 - r.player_count} open
+                    </div>
+                  )}
+                </div>
+              </Link>
+            ))
+          )}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </div>
+    </>
   );
+}
+
+function fmtDate(d: string) {
+  const [, m, day] = d.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[+m - 1]} ${+day}`;
+}
+
+function fmtTime(t: string) {
+  const [h, min] = t.split(':');
+  const hr = +h;
+  const ap = hr >= 12 ? 'PM' : 'AM';
+  return `${hr % 12 || 12}:${min} ${ap}`;
 }
