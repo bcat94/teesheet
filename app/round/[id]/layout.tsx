@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { createClient } from '@supabase/supabase-js';
 
-type Props = { params: { id: string }; children: React.ReactNode };
+type Props = { params: Promise<{ id: string }>; children: React.ReactNode };
 
 export async function generateMetadata({
   params,
