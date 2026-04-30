@@ -208,11 +208,10 @@ export default function RoundPage() {
   function shareRound() {
     if (!round) return;
     const url = window.location.origin + `/round/${id}`;
-    const msg = `⛳ ${orgName} is booking a round!\n\n📍 ${round.course}\n🗓 ${fmtDate(round.date)} at ${fmtTime(round.time)}\n\nTap to claim your spot (${open} open): ${url}`;
     if (navigator.share) {
-      navigator.share({ text: msg, url }).catch(() => {});
+      navigator.share({ url }).catch(() => {});
     } else {
-      navigator.clipboard.writeText(msg).then(() => showToast('Copied!'));
+      navigator.clipboard.writeText(url).then(() => showToast('Link copied!'));
     }
   }
 
