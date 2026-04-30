@@ -1,47 +1,71 @@
 import type { Metadata } from 'next';
 import { createClient } from '@supabase/supabase-js';
 
-function fmtDate(d: string) {
-  const [, m, day] = d.split('-');
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${months[+m - 1]} ${+day}`;
-}
-function fmtTime(t: string) {
-  const [h, min] = t.split(':');
-  const hr = +h;
-  const ap = hr >= 12 ? 'PM' : 'AM';
-  return `${hr % 12 || 12}:${min} ${ap}`;
-}
+type Props = { params: { id: string }; children: React.ReactNode };
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
   const { id } = await params;
-
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_KEY!
   );
 
-  const { data: round } = await supabase.from('rounds').select('*').eq('id', id).single();
-  const { count } = await supabase
+  const { data: round } = await supabase
+    .from('rounds')
+    .select('course, date, time, cancelled')
+    .eq('id', id)
+    .single();
+
+  if (!round) {
+    return {
+      title: 'Tee Sheet',
+      description: 'Round not found',
+    };
+  }
+
+  const { count: playerCount } = await supabase
     .from('players')
     .select('*', { count: 'exact', head: true })
     .eq('round_id', id);
 
-  if (!round) {
-    return { title: 'Tee Sheet' };
+  const claimed = playerCount ?? 0;
+  const openSpots = Math.max(0, 4 - claimed);
+
+  // Format the time for the title strip — short version since iMessage
+  // truncates aggressively.
+  const [y, m, d] = round.date.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dayLabel = dt.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+  const [hStr, mStr] = round.time.split(':');
+  let h = parseInt(hStr, 10);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  const timeLabel = `${h}:${mStr} ${ampm}`;
+
+  // Build the title that appears under the image in iMessage.
+  let title: string;
+  if (round.cancelled) {
+    title = `Cancelled — ${dayLabel} ${timeLabel}`;
+  } else if (openSpots === 0) {
+    title = `Locked in — ${dayLabel} ${timeLabel}`;
+  } else if (openSpots === 4) {
+    title = `Open foursome — ${dayLabel} ${timeLabel}`;
+  } else if (openSpots === 1) {
+    title = `1 spot open — ${dayLabel} ${timeLabel}`;
+  } else {
+    title = `${openSpots} spots open — ${dayLabel} ${timeLabel}`;
   }
 
-  const taken = count ?? 0;
-  const open = 4 - taken;
-  const dateStr = `${fmtDate(round.date)} at ${fmtTime(round.time)}`;
-  const statusStr = round.cancelled
-    ? 'Round cancelled'
-    : open === 0
-      ? 'Foursome is full'
-      : `${open} open - tap to claim your spot`;
-
-  const title = `${round.course} - ${dateStr}`;
-  const description = `${round.organizer_name} booked a round. ${statusStr}`;
+  const description = `${round.course} · ${claimed} of 4 in`;
 
   return {
     title,
@@ -59,6 +83,6 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-export default function RoundLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+export default function RoundLayout({ children }: Props) {
+  return children;
 }
